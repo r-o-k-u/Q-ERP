@@ -38,7 +38,7 @@ export class EmailTemplateGeneratePreviewHandler
 			name: 'John Doe',
 			role: 'USER_ROLE',
 			host: clientBaseUrl || host,
-			hostEmail: '(alish@ever.com)',
+			hostEmail: '(alish@qwerty.co.kem)',
 			agenda: 'This booking is for gauzy call',
 			description: 'This is a test appointment booking',
 			participantEmails: 'kdashora@gmail.com,testmail@hotmail.com',

@@ -31,12 +31,12 @@
 				></mj-divider>
 				<mj-text align="center" font-size="12px" font-family="helvetica"
 					>© 2019,
-					<a href="https://app.gauzy.co/." style="color: #598bff"
-						>Gauzy</a
+					The <a href="https://qdmin.qwerty.co.ke/." style="color: #598bff"
+						>QDMIN</a
 					>
 					by
-					<a href="https://ever.co/" style="color: #598bff"
-						>Ever Co. LTD.</a
+					<a href="https://qwerty.co.ke/" style="color: #598bff"
+						>Qwerty Systems</a
 					>
 					All rights reserved.
 				</mj-text>
