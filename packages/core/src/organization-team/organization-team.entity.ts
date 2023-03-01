@@ -17,6 +17,9 @@ import {
 	IRequestApprovalTeam,
 	ITag,
 	ITask,
+	ITaskPriority,
+	ITaskSize,
+	ITaskStatus,
 	IUser
 } from '@gauzy/contracts';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -28,6 +31,9 @@ import {
 	RequestApprovalTeam,
 	Tag,
 	Task,
+	TaskPriority,
+	TaskSize,
+	TaskStatus,
 	TenantOrganizationBaseEntity,
 	User
 } from '../core/entities/internal';
@@ -41,6 +47,12 @@ export class OrganizationTeam extends TenantOrganizationBaseEntity
 	@Index()
 	@Column()
 	name: string;
+
+	@ApiPropertyOptional({ type: () => String })
+	@IsOptional()
+	@IsString()
+	@Column({ nullable: true })
+	logo: string;
 
 	/**
 	 * prefix for organization team
@@ -113,6 +125,25 @@ export class OrganizationTeam extends TenantOrganizationBaseEntity
 		onDelete: 'SET NULL'
 	})
 	goals?: IGoal[];
+
+
+	/**
+	 * Team Statuses
+	 */
+	@OneToMany(() => TaskStatus, (status) => status.organizationTeam)
+	statuses?: ITaskStatus[];
+
+	/**
+	 * Team Priorities
+	 */
+	@OneToMany(() => TaskPriority, (priority) => priority.organizationTeam)
+	priorities?: ITaskPriority[];
+
+	/**
+	 * Team Sizes
+	 */
+	@OneToMany(() => TaskSize, (size) => size.organizationTeam)
+	sizes?: ITaskSize[];
 
 	/*
 	|--------------------------------------------------------------------------

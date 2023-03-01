@@ -47,9 +47,7 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 	logIsOpen: boolean = false;
 
 	appName: string = this.electronService.remote.app.getName();
-	menus = this.isServer
-		? ['Update', 'Advanced Setting', 'About']
-		: ['Screen Capture', 'Timer', 'Update', 'Advanced Setting', 'About'];
+	menus = [];
 	gauzyIcon =
 		this.isDesktopTimer || this.isServer
 			? './assets/images/logos/logo_Gauzy.svg'
@@ -326,15 +324,40 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 		},
 	];
 
-	selectedMenu = this.isServer ? 'Update' : 'Screen Capture';
-
+	private _selectedMenu$: BehaviorSubject<string>;
+	private get _selectedMenu(): string {
+		return this._selectedMenu$.getValue();
+	}
 	monitorOptionSelected = null;
 	appSetting = null;
 	periodOption = [1, 3, 5, 10];
 	selectedPeriod = 5;
 	screenshotNotification = null;
-	config = null;
-	restartDisable = false;
+	config = {
+		/* Default Selected dialect	*/
+		db: 'sqlite',
+		/* Default Mysql config */
+		mysql: {
+			dbHost: '127.0.0.1',
+			dbPort: 3306,
+			dbUsername: 'root',
+			dbPassword: ''
+		},
+		/* Default PostgresSQL config */
+		postgres: {
+			dbHost: '127.0.0.1',
+			dbPort: 5432,
+			dbUsername: 'postgres',
+			dbPassword: 'postgres'
+		},
+		timeTrackerWindow: null,
+		isLocalServer: false,
+		serverType: null,
+		serverUrl: null,
+		awPort: null,
+		awHost: null,
+		port: 5620
+	};
 	version = '0.0.0';
 	message = {
 		text: 'Application Update',
@@ -376,6 +399,10 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 	private _updaterServer$: BehaviorSubject<any>;
 	private _file$: BehaviorSubject<any>;
 	private _prerelease$: BehaviorSubject<boolean>;
+	private _isCheckDatabase$: BehaviorSubject<boolean>;
+	private _isConnectedDatabase$: BehaviorSubject<{ status: boolean, message: string }>;
+	private _restartDisable$: BehaviorSubject<boolean>;
+	private _isHidden$: BehaviorSubject<boolean>;
 
 	constructor(
 		private electronService: ElectronService,
@@ -394,6 +421,11 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 			local: false,
 		});
 		this._prerelease$ = new BehaviorSubject(false);
+		this._selectedMenu$ = new BehaviorSubject(null);
+		this._isCheckDatabase$ = new BehaviorSubject(false);
+		this._isConnectedDatabase$ = new BehaviorSubject({ status: false, message: null });
+		this._restartDisable$ = new BehaviorSubject(false);
+		this._isHidden$ = new BehaviorSubject(true);
 	}
 
 	ngOnInit(): void {
@@ -406,7 +438,11 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 			this._ngZone.run(() => {
 				const { setting, config, auth, additionalSetting } = arg;
 				this.appSetting = setting;
-				this.config = config;
+				this.config = {
+					...this.config,
+					...config
+				};
+				this.checkDatabaseConnectivity();
 				this.authSetting = auth;
 				this.mappingAdditionalSetting(additionalSetting || null);
 
@@ -432,6 +468,23 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 				if (!this.isServer) {
 					this.getUserDetails();
 				}
+				this.menus = this.isServer
+					? ['Update', 'Advanced Setting', 'About']
+					: [
+						...(auth && auth.allowScreenshotCapture
+							? ['Screen Capture']
+							: []),
+						'Timer',
+						'Update',
+						'Advanced Setting',
+						'About',
+					];
+				const lastMenu =
+					this._selectedMenu &&
+						this.menus.includes(this._selectedMenu)
+						? this._selectedMenu
+						: this.menus[0];
+				this._selectedMenu$.next(lastMenu);
 			})
 		);
 
@@ -528,9 +581,12 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 
 		this.electronService.ipcRenderer.on('goto_top_menu', () =>
 			this._ngZone.run(() => {
-				if (this.isServer) {
-					this.selectMenu('Advanced Setting');
-				} else this.selectMenu('Screen Capture');
+				const lastMenu =
+					this._selectedMenu &&
+						this.menus.includes(this._selectedMenu)
+						? this._selectedMenu
+						: this.menus[0];
+				this.selectMenu(lastMenu);
 			})
 		);
 
@@ -570,6 +626,15 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 				this._dialogService.open(AboutComponent);
 			});
 		});
+
+		this.electronService.ipcRenderer.on('database_status', (event, arg) => {
+			this._ngZone.run(() => {
+				this._isCheckDatabase$.next(false);
+				this._isConnectedDatabase$.next(arg);
+				this._isHidden$.next(false);
+				this._restartDisable$.next(!this._isConnectedDatabase.status);
+			});
+		})
 	}
 
 	mappingAdditionalSetting(values) {
@@ -598,7 +663,7 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 	}
 
 	selectMenu(menu) {
-		this.selectedMenu = menu;
+		this._selectedMenu$.next(menu);
 	}
 
 	updateSetting(value, type) {
@@ -657,7 +722,7 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 
 	restartApp() {
 		if (this.isServer && this.serverIsRunning) {
-			this.restartDisable = true;
+			this._restartDisable$.next(true);
 		} else {
 			this.logout();
 		}
@@ -685,13 +750,15 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 				['5621', '5622'].findIndex((item) => item === val.toString()) >
 				-1
 			) {
-				this.restartDisable = true;
+				this._restartDisable$.next(true);
 			} else {
-				this.restartDisable = false;
+				this._restartDisable$.next(false);
 			}
 		}
 		if (type === 'db') {
 			console.log('Port change', val);
+			this._restartDisable$.next(true);
+			this._isHidden$.next(true);
 		}
 	}
 
@@ -711,6 +778,13 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 			default:
 				break;
 		}
+	}
+
+	public checkDatabaseConnectivity() {
+		this._isHidden$.next(false);
+		this._restartDisable$.next(true);
+		this._isCheckDatabase$.next(true);
+		this.electronService.ipcRenderer.send('check_database_connection', this.config);
 	}
 
 	checkForUpdate() {
@@ -745,19 +819,8 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 	 * Get logged in user details
 	 */
 	getUserDetails() {
-		const request = {
-			...this.authSetting,
-			...this.config,
-			apiHost: this.config.serverUrl,
-		};
 		if (this.authSetting) {
-			this.timeTrackerService.getUserDetail(request).then((res) => {
-				if (!this.authSetting.isLogout) {
-					this.currentUser$.next(res);
-				} else {
-					this.currentUser$.next(null);
-				}
-			});
+			this.currentUser$.next(this.authSetting.user);
 		} else {
 			this.currentUser$.next(null);
 		}
@@ -768,6 +831,7 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 	 */
 	logout() {
 		console.log('On Logout');
+		localStorage.clear();
 		this.electronService.ipcRenderer.send('logout_desktop');
 	}
 
@@ -792,6 +856,8 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 	}
 
 	onDriverChange(val) {
+		this._restartDisable$.next(true);
+		this._isHidden$.next(true);
 		switch (val) {
 			case 'sqlite':
 				this.config.db = 'sqlite';
@@ -815,7 +881,7 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 					'Server configuration updated, please wait till server restarts';
 				break;
 			case 'start_server':
-				this.restartDisable = false;
+				this._restartDisable$.next(false);
 				message = 'Server Restated Successfully';
 				break;
 			default:
@@ -931,4 +997,37 @@ export class SettingsComponent implements OnInit, AfterViewInit {
 	public get isServer(): boolean {
 		return this.appName === 'gauzy-server';
 	}
+
+	public get selectedMenu$(): Observable<string> {
+		return this._selectedMenu$.asObservable();
+	}
+
+	public get _isConnectedDatabase(): { status: boolean, message: string } {
+		return this._isConnectedDatabase$.getValue();
+	}
+
+	public get isConnectedDatabase$(): Observable<{ status: boolean, message: string }> {
+		return this._isConnectedDatabase$.asObservable()
+	}
+
+	public get _isCheckDatabase(): boolean {
+		return this._isCheckDatabase$.getValue();
+	}
+
+	public get isCheckDatabase$(): Observable<boolean> {
+		return this._isCheckDatabase$.asObservable();
+	}
+
+	public get restartDisable$(): Observable<boolean> {
+		return this._restartDisable$.asObservable();
+	}
+
+	public get isHidden$(): Observable<boolean> {
+		return this._isHidden$.asObservable();
+	}
+
+	public onHide() {
+		this._isHidden$.next(true);
+	}
+
 }
