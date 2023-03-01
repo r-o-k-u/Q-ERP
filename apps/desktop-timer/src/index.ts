@@ -104,6 +104,10 @@ const sqlite3filename = `${process.env.GAUZY_USER_PATH}/gauzy.sqlite3`;
 log.info(`Sqlite DB path: ${sqlite3filename}`);
 
 const provider = ProviderFactory.instance;
+(async () => {
+	await provider.createDatabase();
+	await provider.migrate();
+})();
 const knex = provider.connection;
 
 const exeName = path.basename(process.execPath);
@@ -152,9 +156,13 @@ if (!gotTheLock) {
 	app.quit();
 } else {
 	app.on('second-instance', () => {
-		// if someone tried to run a second instance, we should focus our window and show warning message.
+		// if someone tried to run a second instance, we should only show and focus on current window instance.
 		if (gauzyWindow) {
-			if (gauzyWindow.isMinimized()) gauzyWindow.restore();
+			// show window if it hides
+			gauzyWindow.show();
+			// restore window if it's minified
+			gauzyWindow.restore();
+			// focus on the main window
 			gauzyWindow.focus();
 		}
 	});
@@ -183,14 +191,14 @@ async function startServer(value, restart = false) {
 			project: projectConfig
 				? projectConfig
 				: {
-						projectId: null,
-						taskId: null,
-						note: null,
-						aw,
-						organizationContactId: null,
-				  },
+					projectId: null,
+					taskId: null,
+					note: null,
+					aw,
+					organizationContactId: null,
+				},
 		});
-	} catch (error) {}
+	} catch (error) { }
 
 	/* create main window */
 	if (value.serverConfigConnected || !value.isLocalServer) {
@@ -410,6 +418,10 @@ ipcMain.on('restart_app', (event, arg) => {
 				host: getApiBaseUrl(configs),
 			});
 		}
+		/* Killing the provider. */
+		await provider.kill();
+		/* Creating a database if not exit. */
+		await ProviderFactory.instance.createDatabase();
 		app.relaunch({ args: process.argv.slice(1).concat(['--relaunch']) });
 		app.exit(0);
 	}, 100);
@@ -442,37 +454,38 @@ ipcMain.on('restart_and_update', () => {
 });
 
 ipcMain.on('check_database_connection', async (event, arg) => {
-	let databaseOptions;
-	if (arg.db === 'postgres' || arg.db === 'mysql') {
-		databaseOptions = {
-			client: arg.db === 'postgres' ? 'pg' : 'mysql',
-			connection: {
-				host: arg.dbHost,
-				user: arg.dbUsername,
-				password: arg.dbPassword,
-				database: arg.dbName,
-				port: arg.dbPort,
-			},
-		};
-	} else {
-		databaseOptions = {
-			client: 'sqlite',
-			connection: {
-				filename: sqlite3filename,
-			},
-		};
-	}
-	const dbConn = require('knex')(databaseOptions);
 	try {
+		const provider = arg.db;
+		let databaseOptions;
+		if (provider === 'postgres' || provider === 'mysql') {
+			databaseOptions = {
+				client: provider === 'postgres' ? 'pg' : 'mysql',
+				connection: {
+					host: arg[provider].dbHost,
+					user: arg[provider].dbUsername,
+					password: arg[provider].dbPassword,
+					database: arg[provider].dbName,
+					port: arg[provider].dbPort
+				}
+			};
+		} else {
+			databaseOptions = {
+				client: 'sqlite',
+				connection: {
+					filename: sqlite3filename,
+				},
+			};
+		}
+		const dbConn = require('knex')(databaseOptions);
 		await dbConn.raw('select 1+1 as result');
 		event.sender.send('database_status', {
 			status: true,
 			message:
-				arg.db === 'postgres'
+				provider === 'postgres'
 					? 'Connection to PostgresSQL DB Succeeds'
-					: arg.db === 'mysql'
-					? 'Connection to MySQL DB Succeeds'
-					: 'Connection to SQLITE DB Succeeds',
+					: provider === 'mysql'
+						? 'Connection to MySQL DB Succeeds'
+						: 'Connection to SQLITE DB Succeeds',
 		});
 	} catch (error) {
 		event.sender.send('database_status', {
@@ -526,7 +539,7 @@ app.on('before-quit', (e) => {
 		// soft download cancellation
 		try {
 			updater.cancel();
-		} catch (e) {}
+		} catch (e) { }
 		app.exit(0);
 		if (serverDesktop) serverDesktop.kill();
 		if (serverGauzy) serverGauzy.kill();
@@ -556,16 +569,16 @@ function launchAtStartup(autoLaunch, hidden) {
 				path: app.getPath('exe'),
 				args: hidden
 					? [
-							'--processStart',
-							`"${exeName}"`,
-							'--process-start-args',
-							`"--hidden"`,
-					  ]
+						'--processStart',
+						`"${exeName}"`,
+						'--process-start-args',
+						`"--hidden"`,
+					]
 					: [
-							'--processStart',
-							`"${exeName}"`,
-							'--process-start-args',
-					  ],
+						'--processStart',
+						`"${exeName}"`,
+						'--process-start-args',
+					],
 			});
 			break;
 		case 'linux':

@@ -40,6 +40,7 @@ export interface IUser extends IBasePerTenantEntityModel {
 	code?: number;
 	codeExpireAt?: Date;
 	emailVerifiedAt?: Date;
+	isEmailVerified?: boolean;
 	emailToken?: string;
 	invites?: IInvite[];
 }
@@ -49,6 +50,7 @@ export interface IUserFindInput extends IBasePerTenantEntityModel {
 	firstName?: string;
 	lastName?: string;
 	email?: string;
+	phoneNumber?: string;
 	username?: string;
 	role?: IRole;
 	roleId?: string;
@@ -77,7 +79,7 @@ export interface IVerificationTokenPayload extends IUserEmailInput {
 	id: string;
 }
 
-export interface IUserInviteCodeConfirmationInput extends IUserEmailInput, IUserCodeInput {}
+export interface IUserInviteCodeConfirmationInput extends IUserEmailInput, IUserCodeInput { }
 
 export interface IUserEmailInput {
 	email: string;
@@ -95,7 +97,7 @@ export interface IUserCodeInput {
 	code: number;
 }
 
-export interface IUserLoginInput extends IUserEmailInput, IUserPasswordInput {}
+export interface IUserLoginInput extends IUserEmailInput, IUserPasswordInput { }
 
 export interface IAuthResponse {
 	user: IUser;
@@ -106,6 +108,7 @@ export interface IUserCreateInput {
 	firstName?: string;
 	lastName?: string;
 	email?: string;
+	phoneNumber?: string;
 	username?: string;
 	role?: IRole;
 	roleId?: string;
